@@ -1,0 +1,13 @@
+{
+    "local_base_dir": "/home/gator/Documents/DAQ/data/test_sync",
+    "remote_host": "farm-ui1.physik.uzh.ch",
+    "username": "atp",
+    "ssh_key_file": "/home/gator/.ssh/id_ed25519",
+    "remote_base_dir": "/disk/gfs_atp/gator/raw_data/staging",
+    "logging":{
+        "log_dir": "/home/gator/local/logs/GatorDaqSync",
+        "log_file_prefix": "gator_daq_sync",
+        "log_level": "INFO"
+    },
+    "loop_sleep_sec": 3600
+}

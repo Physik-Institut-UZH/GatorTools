@@ -1,0 +1,47 @@
+{
+    "StagingBaseDir": "/Users/nessuno/gator/GatorTools/proc_test/staging_data",
+    "ProcBaseDir": "/Users/nessuno/gator/GatorTools/proc_test/proc_data",
+    "ArchiveFiles":{
+        "BaseDir": "/Users/nessuno/gator/GatorTools/proc_test/archive_data",
+        "TrigRateRequired": true
+    },
+    "TrigRate":{
+         "MinTrapEnergy": 100,
+         "MaxTrapEnergy": 2000,
+         "TrigRateFile":"/Users/nessuno/gator/GatorTools/proc_test/triggerrate.txt",
+         "Queries":[
+            "wf3_raw_pur==False"
+         ]
+    },
+    "chs_map":{
+        "wf1": {
+            "type": "preamp",
+            "bslnsubtr": {"bslnsamps":200, "bsln_meth": "mean", "neg_pulse": false},
+            "processors": {
+                "trapezoid": {"shape_time": 1500, "tau": 4660.0, "flat_top": 80}
+            }
+        },
+        "wf2": {
+            "type": "specamp",
+            "bslnsubtr": {"bslnsamps":200, "bsln_meth": "mean", "neg_pulse": false},
+            "processors": {
+                "gaussfilter": {"sigma": 75.0, "kernel_half_width": 40, "find_pulses":true, "ampl_min_thr":80.0, "derivative": true}
+            }
+        },
+        "wf3": {
+            "type": "specamppur",
+            "processors": {
+                "rawpur": {
+                    "threshold": 500.0
+                }
+            }
+        }
+    },
+    "logging":{
+        "logger_name": "daq_proc",
+        "log_dir": "/Users/nessuno/gator/GatorTools/proc_test/logs/GatorDaqProc",
+        "log_file_prefix": "gator_daq_proc",
+        "log_level": "INFO"
+    },
+    "loop_sleep_sec": 3600
+}
