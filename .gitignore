@@ -1,2 +1,18 @@
+# Optional: editor / OS stuff
+*.swp
+*.swo
 .vscode
 .DS_Store
+
+# Python caches
+__pycache__/
+*.pyc
+*.pyo
+
+# Setuptools / pip artifacts
+*.egg-info/
+.eggs/
+*.egg
+build/
+dist/
+
