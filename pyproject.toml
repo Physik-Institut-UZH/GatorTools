@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "gator-tools"
+version = "0.1.0"
+description = "Gator SC processing tools"
+authors = [{name="Gator"}]
+requires-python = ">=3.11"
+
+[tool.setuptools]
+py-modules = [
+    "GatorDaqProc",
+    "GatorUtils",
+    "SyncDaqFiles"
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+exclude = ["scripts*", "examples*", "tests*"]
