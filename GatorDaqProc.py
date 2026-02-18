@@ -372,7 +372,7 @@ class GatorDaqProc:
 
         if (not trig_rate_only):
             np.save(proc_fpath, data_export) #This implicitly uses pickles
-            self.logger.info(f'File "{fname}" successfully processed into "{proc_fpath}" numpy file.')
+            self.logger.info(f'GatorDaqProc.ProcFile: File "{Path(fpath).name}" successfully processed into "{proc_fpath}" numpy file.')
         #
 
         if ('TrigRate' in self.config_dict) and (metadata_dict is None):
