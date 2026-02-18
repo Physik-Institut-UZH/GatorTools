@@ -141,7 +141,7 @@ class GatorDaqProc:
         try:
             while True:
                 try:
-                    self.logger.info(f'GatorDaqProc.run: start of processing of the "{self.proc_base_dir}" directory tree.')
+                    self.logger.info(f'GatorDaqProc.run: start of processing of the "{self.staging_base_dir}" directory tree into the "{self.proc_base_dir}" directory tree of processed files.')
                     self.ProcTree()
                 finally:
                     time.sleep(self.loop_sleep_sec)
