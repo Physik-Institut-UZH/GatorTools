@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+
 import sys
 
 #The imports here below must be in the $PYTHONPATH
