@@ -330,7 +330,7 @@ def main():
         sync_client = GatorDaqSync(config_fname)
     else:
         sync_client = GatorDaqSync()
-    
+    #
 
     sync_client.sync_loop()
 

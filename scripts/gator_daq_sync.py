@@ -2,18 +2,19 @@
 
 import sys
 
+
 #The imports here below must be in the $PYTHONPATH
-from GatorDaqProc import GatorDaqProc
+from SyncDaqFiles import GatorDaqSync
 
 def main():
     if len(sys.argv)>1:
         config_fname = sys.argv[1]
-        daq_rate_obj = GatorDaqProc(config_fname)
+        sync_client = GatorDaqSync(config_fname)
     else:
-        daq_rate_obj = GatorDaqProc()
+        sync_client = GatorDaqSync()
     #
 
-    daq_rate_obj.run()
+    sync_client.sync_loop()
 
 if __name__ == "__main__":
     main()
