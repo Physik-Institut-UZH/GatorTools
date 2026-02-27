@@ -1,4 +1,5 @@
 import os
+import sys
 
 import logging
 from logging.handlers import TimedRotatingFileHandler
@@ -44,7 +45,7 @@ def setup_logger(logger_settings_dict:dict=None):
     #
 
     # --- Screen handler ---
-    sh = logging.StreamHandler()
+    sh = logging.StreamHandler(sys.stdout)
     sh.setFormatter(formatter)
     logger.addHandler(sh)
 
