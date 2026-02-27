@@ -3,6 +3,11 @@
 source $HOME/.bashrc
 source $HOME/.localenv # Here is where the $LOCALSYS and all the other paths are defined
 
+if [[ -z "$LOCALSYS" ]]; then
+	    echo "$(date) : LOCALSYS not set!" >> "$HOME/local/var/log/cron/cron_env_error.err"
+	        exit 1
+fi
+
 SESSION_NAME="GatorDaqSync"
 
 CONDA_ENV="gator"
