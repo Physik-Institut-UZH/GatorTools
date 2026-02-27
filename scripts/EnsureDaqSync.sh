@@ -26,7 +26,6 @@ else
   screen -d -m -S "$SESSION_NAME" bash -c "
         source $HOME/.bashrc;
         source $HOME/.localenv;
-	PTY=\$(tty)
 	exec $PYTHON_EXEC $SCRIPT_PATH $GATOR_DAQSYNC_JSON;
     "
 
