@@ -1,7 +1,7 @@
 {
-    "ProcBaseDir": "/Users/nessuno/gator/sessions/processor_test/proc_data",
-    "OutDir": "/Users/nessuno/gator/sessions/processor_test",
-    "loop_sleep_sec": 10,
+    "ProcBaseDir": "/disk/gfs_atp/gator/proc_data",
+    "OutDir": "/home/atp/atp/GatorSC/slowcontrol/plots",
+    "loop_sleep_sec": 900,
     "raw_nbins": 500,
     "raw_spect_range": [0, 3500],
     "en_nbins": 500,
@@ -11,5 +11,11 @@
     "CalibCoeff":{
         "0": -0.215741,
         "1": 0.890273
+    },
+    "logging":{
+        "logger_name": "live_spect",
+        "log_dir": "/home/atp/atp/local/var/log/gator_live_spectra",
+        "log_file_prefix": "gator_live_spectra",
+        "log_level": "INFO"
     }
 }
