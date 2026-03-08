@@ -32,8 +32,11 @@ class GatorDatasetsStorage:
         self.dfs_lst = list()
         
         for _ids, ds in enumerate(self.datasets):
+            #print(f'GatorDatasetsStorage.__init__: loading dataset "{ds}"')
             _paths_lst = glob(path.join(self.datadir, ds, '*.root'))
-            for _iFile, _fpath in enumerate(_paths_lst):
+            #print(f'GatorDatasetsStorage.__init__: found {len(_paths_lst)} file for dataset "{ds}"')
+            for _iFile, _fpath in enumerate(sorted(_paths_lst)):
+                #print(f'GatorDatasetsStorage.__init__: loading file for file "{_fpath}"')
                 _filehandler = GatorRawFileHandler(fpath=_fpath, chs_lst=self.chs_lst)
                 _filehandler() #Load the data and for the moment keep the wfs
                 _df = _filehandler.getDf()

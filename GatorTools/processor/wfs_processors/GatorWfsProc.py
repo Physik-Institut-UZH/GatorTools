@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 
-from processor import data_managers
+from ...processor import data_managers
 
 from typing import TYPE_CHECKING
 from typing import (Dict, Type)

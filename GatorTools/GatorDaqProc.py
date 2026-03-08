@@ -5,6 +5,7 @@ import glob
 import time
 from pathlib import Path
 import shutil
+from datetime import datetime
 
 import numpy as np
 import pandas as pd
@@ -13,8 +14,10 @@ import uproot
 import logging
 from logging.handlers import TimedRotatingFileHandler
 
-from GatorUtils import setup_logger
-from processor import GatorFileProcessor
+from .GatorUtils import (setup_logger, load_processed_file)
+from .processor import GatorFileProcessor
+
+import matplotlib.pyplot as plt
 
 class GatorDaqProc:
     FILES_EXT = {".root"}
@@ -24,7 +27,7 @@ class GatorDaqProc:
         if config_fpath=="":
             self.config_fpath = self._search_config_file()
             if self.config_fpath is None:
-                raise FileNotFoundError('Could not find the configuration for the data sync config file.')
+                raise FileNotFoundError('Could not find the configuration file for the DAQ processing.')
         else:
             self.config_fpath = config_fpath
         
@@ -55,6 +58,9 @@ class GatorDaqProc:
             self.logger = setup_logger(self.config_dict['logging'])
         else:
             self.logger = setup_logger()
+        #
+
+        self.last_unixtime = None
     #
 
     def _load_proc_state_file(self, _path):
@@ -94,6 +100,8 @@ class GatorDaqProc:
                 return conf_file
             else:
                 return None
+            #
+        #
         
         #Check inside the $HOME/.local/etc/GatorDaqProc directory
         home_path = os.environ.get("HOME")
@@ -522,16 +530,415 @@ class GatorDaqProc:
         self.logger.info(f'GatorDaqProc.ArchiveFile: file "{src.name}" successfully archived into "{dst}".')
         #
     #
+#
 
-def main():
-    if len(sys.argv)>1:
-        config_fname = sys.argv[1]
-        daq_rate_obj = GatorDaqProc(config_fname)
-    else:
-        daq_rate_obj = GatorDaqProc()
+class GatorLiveSpectrum():
+    FILES_EXT = {".npy"}
+    RAW_SPECT_FNAME = 'total_spectrum.png'
+    EN_SPECT_FNAME = 'counts_vs_energy.png'
+
+    def __init__(self, config_fpath:str=""):
+        if config_fpath=="":
+            self.config_fpath = self._search_config_file()
+            if self.config_fpath is None:
+                raise FileNotFoundError('Could not find the configuration file for the spectrum synchronization.')
+        else:
+            self.config_fpath = config_fpath
+        #
+         
+        with open(self.config_fpath, "r") as f:
+            self.config_dict = json.load(f)
+        #
+
+        if 'logging' in self.config_dict:
+            self.logger = setup_logger(self.config_dict['logging'])
+        else:
+            self.logger = setup_logger()
+        #
+
+        self.proc_base_dir = self.config_dict['ProcBaseDir']
+
+        self.out_dir = '.'
+        if 'OutDir' in self.config_dict:
+            try:
+                self.out_dir = self.config_dict['OutDir']
+            except Exception:
+                self.logger.exception(f'GatorLiveSpectrum:__init__: failed to create output directory "{self.out_dir}"')
+                raise
+        #
+         
+        self.latest_dataset = None
+        self.latest_unixtime = None
+
+        self.loop_sleep_sec = 600 #Default sleep is 10 mins
+        if('loop_sleep_sec' in self.config_dict):
+            try:
+                self.loop_sleep_sec = int(self.config_dict['loop_sleep_sec'])
+            except Exception:
+                self.logger.exception(f'GatorLiveSpectrum:__init__: failed to create output directory "{self.out_dir}"')
+        #
+        
+        self.raw_nbins = int(self.config_dict['raw_nbins'])
+        self.raw_spect_range = [float(self.config_dict['raw_spect_range'][0]), float(self.config_dict['raw_spect_range'][1])]
+
+        self.en_nbins = int(self.config_dict['en_nbins'])
+        self.en_spect_range = [float(self.config_dict['en_spect_range'][0]), float(self.config_dict['en_spect_range'][1])]
+
+        self.query_lst = list()
+        if 'Queries' in  self.config_dict:
+            self.query_lst = self.config_dict['Queries']
+        #
+
+        self.latest_run_only_datasets_lst = list()
+        if 'LatestRunOnlyDatasetsLst' in  self.config_dict:
+            self.latest_run_only_datasets_lst = self.config_dict['LatestRunOnlyDatasetsLst']
+        #
+
+        self.calib_coeff = {int(k):float(v) for k,v in self.config_dict['CalibCoeff'].items()}
     #
 
-    daq_rate_obj.run()
+    def _search_config_file(self):
+        #Check if it is encoded in an environment variable
+        conf_file = os.environ.get("GATOR_DAQPROC_FILE")
+        
+        if not conf_file is None:
+            if os.path.exists(conf_file) and os.path.isfile():
+                return conf_file
+            else:
+                return None
+            #
+        #
+        
+        #Check inside the $HOME/local/etc/GatorDaqProc directory
+        home_path = os.environ.get("HOME")
+        settings_dir = os.path.join(home_path, 'local', 'etc', 'GatorDaqProc')
 
-if __name__ == "__main__":
-    main()
+        if os.path.exists(settings_dir) and os.path.isdir(settings_dir):
+            fpath = os.path.join(settings_dir, 'config.json')
+            if os.path.exists(fpath) and os.path.isfile(fpath):
+                return fpath
+            #
+        #
+
+        return None
+    #
+
+    def run(self):
+        try:
+            while True:
+                try:
+                    self.logger.info(f'GatorLiveSpectrum.run: start of processing of the "{self.proc_base_dir}" directory tree of processed files.')
+                    self.ProcDatasets()
+                finally:
+                    time.sleep(self.loop_sleep_sec)
+                #
+            #
+        except KeyboardInterrupt:
+            self.logger.info("GatorLiveSpectrum.run: interrupted by user (Ctrl+C), exiting gracefully")
+            return
+        #
+    #
+
+    def ProcDatasets(self):
+        # First change directory
+        os.chdir(self.proc_base_dir)
+
+        latest_run = None
+        self.latest_dataset = None # Reset again this here
+
+        for dataset in [d for d in os.listdir('.') if os.path.isdir(d)]:
+            dataset_path = os.path.join('.', dataset)
+            # List run directories inside dataset
+            runs = [
+                d for d in os.listdir(dataset_path)
+                if os.path.isdir(os.path.join(dataset_path, d))
+            ]
+
+            if not runs:
+                continue
+            #
+
+            # Since format is YYYYMMDD_HHMMSS, max() gives most recent
+            _mrun = max(runs)
+            if (latest_run is None) or (_mrun>latest_run):
+                latest_run = _mrun
+                self.latest_dataset = dataset
+            #
+        #
+
+        if self.latest_dataset is None:
+            return
+        #
+
+        self.logger.info(f'GatorLiveSpectrum.ProcDatasets: dataset with the latest run: "{self.latest_dataset}"')
+
+        #From here I should have selected the dataset corresponding to the latest run
+        dataset_path = os.path.join('.', self.latest_dataset)
+
+        if self.latest_dataset in self.latest_run_only_datasets_lst:
+            # This are the special datasets for which I want to keep only the latest run
+            runs_path = [os.path.join(dataset_path, latest_run)]
+        else:
+            runs = [d for d in os.listdir(dataset_path)
+                    if os.path.isdir(os.path.join(dataset_path, d))
+                   ]
+            runs_path = [os.path.join(dataset_path, run) for run in runs]
+        #
+
+        self.ProcRuns(runs_path)
+    #
+
+    def ProcRuns(self, runs_path:list):
+        all_fpaths = []
+        for rpath in runs_path:
+            all_fpaths.extend(
+                os.path.join(rpath, fname)
+                for fname in os.listdir(rpath)
+                if os.path.splitext(fname)[1] in GatorLiveSpectrum.FILES_EXT
+            )
+        #
+        
+        if not all_fpaths:
+            self.logger.error(f'GatorLiveSpectrum.ProcRuns: no files found for the "{self.latest_dataset}" dataset (the latest). Cannot proceed to the spectrum building.')
+            return
+        #
+
+        spectra_lst = list()
+        self.latest_unixtime = None
+        for fpath in all_fpaths:
+            run_dict = dict()
+            runtime = 0.0
+            try:
+                ret_dict = load_processed_file(fpath, logger=self.logger)
+                df = ret_dict['df']
+                df, ncut = self.ApplyCuts(df)
+
+                trap_en_arr = ret_dict['df']['wf1_energy_trap'].to_numpy() #HARDCODED: the name of the column. TODO: use a user setting to define the column to use
+                run_dict['raw_spect'] = trap_en_arr
+                run_dict['en_spect'] = self.EnergyCalib(trap_en_arr)
+
+                runtime = ret_dict['FileRunTime'] - ncut*ret_dict['WfsLength']/ret_dict['SampFreq']
+                run_dict['runtime'] = runtime
+                unixtime = ret_dict['StartUnixTime']
+                if (self.latest_unixtime is None) or (self.latest_unixtime<int(unixtime)):
+                    self.latest_unixtime = int(unixtime)
+                #
+
+            except:
+                self.logger.exception(f'GatorLiveSpectrum.ProcRuns: failed to build histogram from file "{fpath}".')
+            else:
+                spectra_lst.append(run_dict)
+            #
+        #
+        
+        try:
+            spect_dict = self.BuildSpectra(spectra_lst)
+        except Exception:
+            self.logger.exception(f'GatorLiveSpectrum.ProcRuns: failed to build the spectra for the "{self.latest_dataset}" dataset (the latest).')
+            return
+        #
+        if spect_dict is None:
+            self.logger.error(f'GatorLiveSpectrum.ProcRuns: failed to build the spectra for the "{self.latest_dataset}" dataset (the latest).')
+            return
+        #
+
+        try:
+            self.DrawRawSpectrum(spect_dict)
+        except Exception:
+            self.logger.exception(f'GatorLiveSpectrum.ProcRuns: failed to draw the raw spectrum for the "{self.latest_dataset}" dataset (the latest).')
+            return
+        #
+        
+        try:
+            self.DrawEnergySpectrum(spect_dict)
+        except Exception:
+            self.logger.exception(f'GatorLiveSpectrum.ProcRuns: failed to draw the energy spectrum for the "{self.latest_dataset}" dataset (the latest).')
+        #
+    #
+    
+    def ApplyCuts(self, df:pd.DataFrame):
+        nbefore = df.shape[0]
+        for query in self.query_lst:
+            df = df.query(query)
+        #
+        return (df, nbefore-df.shape[0]) #df, ncut
+    #
+
+    def EnergyCalib(self, raw_spect:np.array):
+        energy_spect = np.zeros_like(raw_spect, dtype=float)
+        try:
+            for pwr, coef in self.calib_coeff.items():
+                energy_spect += coef * np.power(raw_spect, pwr)
+            #
+        except:
+            self.logger.exception(f'GatorLiveSpectrum.EnergyCalib: failed to compute the energy spectrum.')
+            return None
+    
+        return energy_spect
+    #
+
+    def BuildSpectra(self, spectra_lst:list):
+        raw_spect = None
+        raw_bin_edges = None
+
+        en_spect = None
+        en_bin_edges = None
+
+        tot_runtime = 0.0
+
+        for spect_dict in spectra_lst:
+            try:
+                #Raw spectrum 
+                _raw_hist, _raw_bin_edges = np.histogram(spect_dict['raw_spect'],
+                                                bins=self.raw_nbins,
+                                                range=(self.raw_spect_range[0], self.raw_spect_range[1])
+                                                )
+                if raw_spect is None:
+                    raw_spect = _raw_hist
+                    raw_bin_edges = _raw_bin_edges
+                else:
+                    raw_spect += _raw_hist
+                #
+
+                #Energy spectrum
+                _en_hist, _en_bin_edges = np.histogram(spect_dict['en_spect'],
+                                                bins=self.raw_nbins,
+                                                range=(self.en_spect_range[0], self.en_spect_range[1])
+                                                )
+                if en_spect is None:
+                    en_spect = _en_hist
+                    en_bin_edges = _en_bin_edges
+                else:
+                    en_spect += _en_hist
+                #
+                
+                tot_runtime += spect_dict['runtime']
+            except:
+                self.logger.exception(f'GatorLiveSpectrum.BuildSpectra: failed to build the spectra histograms for the dataset "{self.latest_dataset}".')
+                return None
+            #
+        #
+
+        if (raw_spect is None) or (en_spect is None):
+            return None
+        #
+
+        #Convert the energy spectrum to counts/(keV*day)
+        en_bins_width = en_bin_edges[1:] - en_bin_edges[:-1]
+        tot_runtime /= (24*3600) #Converted in days
+        en_spect = en_spect/en_bins_width/tot_runtime
+
+        self.logger.debug(f'GatorLiveSpectrum.BuildSpectra: number of files={len(spectra_lst)}; total lifetime: {tot_runtime} days')
+
+        return {'raw_spect':raw_spect, 'raw_bin_edges':raw_bin_edges, 'en_spect':en_spect, 'en_bin_edges':en_bin_edges, 'runtime':tot_runtime, 'nfiles':len(spectra_lst)}
+    #
+
+    def DrawRawSpectrum(self, spect_dict):
+
+        spect = spect_dict['raw_spect']
+        bin_edges = spect_dict['raw_bin_edges']
+        runtime = spect_dict['runtime']
+        nfiles = spect_dict['nfiles']
+
+        latest_unixtime_str = datetime.fromtimestamp(self.latest_unixtime).strftime("%Y-%m-%d %H:%M")
+
+        # Compute bin centers
+        bin_centers = 0.5 * (bin_edges[:-1] + bin_edges[1:])
+
+        fig, ax = plt.subplots(figsize=(16, 8), dpi=100) # Make a 1600x800 pixels canvas
+
+        ax.step(bin_centers, spect, where='mid')
+
+        ax.set_xlabel("Channel")
+        ax.set_ylabel("Counts")
+        ax.set_title(f'Raw spectrum - {nfiles} files')
+
+        lines = [
+            #f'Last update: {datetime.now():%Y-%m-%d %H:%M}',
+            f'Last update: {latest_unixtime_str}',
+            f'Dataset: {self.latest_dataset}'
+            ]
+
+        if (runtime is not None) and (runtime > 0):
+            lines.append(f'Live time: {runtime:.2f} days')
+
+        txt = "\n".join(lines)
+
+        if (runtime is not None) and (runtime>0):
+            ax.text(
+                0.5, 0.95,
+                txt,
+                transform=ax.transAxes,
+                ha='center',
+                va='top',
+                #bbox=dict(facecolor='white', alpha=0.8)
+            )
+
+        ax.set_yscale('log')  # usually useful for spectra
+        ax.grid(True)
+
+        plt.tight_layout()
+
+        # Save plot
+        outpath = os.path.join(self.out_dir, GatorLiveSpectrum.RAW_SPECT_FNAME)
+
+        plt.savefig(outpath)
+        plt.close(fig)
+
+        self.logger.info(f'GatorLiveSpectrum.DrawRawSpectrum: Raw spectrum of dataset "{self.latest_dataset}" saved to "{outpath}"')
+    #
+    
+    def DrawEnergySpectrum(self, spect_dict):
+
+        spect = spect_dict['en_spect']
+        bin_edges = spect_dict['en_bin_edges']
+        runtime = spect_dict['runtime'] #Converted in days
+        nfiles = spect_dict['nfiles']
+
+        latest_unixtime_str = datetime.fromtimestamp(self.latest_unixtime).strftime("%Y-%m-%d %H:%M")
+
+        # Compute bin centers
+        bin_centers = 0.5 * (bin_edges[:-1] + bin_edges[1:])
+
+        fig, ax = plt.subplots(figsize=(16, 8), dpi=100) # Make a 1600x800 pixels canvas
+
+        ax.step(bin_centers, spect, where='mid')
+
+        ax.set_xlabel("Energy (keV)")
+        ax.set_ylabel(r'$\mathrm{Counts\,keV^{-1}\,day^{-1}}$')
+        ax.set_title(f'Energy spectrum - {nfiles} files')
+
+        lines = [
+            #f'Last update: {datetime.now():%Y-%m-%d %H:%M}',
+            f'Last update: {latest_unixtime_str}',
+            f'Dataset: {self.latest_dataset} - {nfiles} files'
+            ]
+
+        if (runtime is not None) and (runtime > 0):
+            lines.append(f'Live time: {runtime:.2f} days')
+
+        txt = "\n".join(lines)
+        
+        if (runtime is not None) and (runtime > 0):
+            ax.text(
+                0.5, 0.95,
+                txt,
+                transform=ax.transAxes,
+                ha='center',
+                va='top',
+                #bbox=dict(facecolor='white', alpha=0.8)
+            )
+
+        ax.set_yscale('log')  # usually useful for spectra
+        ax.grid(True)
+
+        plt.tight_layout()
+
+        # Save plot
+        outpath = os.path.join(self.out_dir, GatorLiveSpectrum.EN_SPECT_FNAME)
+
+        plt.savefig(outpath)
+        plt.close(fig)
+
+        self.logger.info(f'GatorLiveSpectrum:DrawEnergySpectrum: Energy spectrum of dataset "{self.latest_dataset}" saved to "{outpath}"')
+    #

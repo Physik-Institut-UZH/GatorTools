@@ -4,7 +4,7 @@ import sys
 
 
 #The imports here below must be in the $PYTHONPATH
-from SyncDaqFiles import GatorDaqSync
+from GatorTools.SyncDaqFiles import GatorDaqSync
 
 def main():
     if len(sys.argv)>1:
