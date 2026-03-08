@@ -1,0 +1,15 @@
+{
+    "ProcBaseDir": "/Users/nessuno/gator/sessions/processor_test/proc_data",
+    "OutDir": "/Users/nessuno/gator/sessions/processor_test",
+    "loop_sleep_sec": 10,
+    "raw_nbins": 500,
+    "raw_spect_range": [0, 3500],
+    "en_nbins": 500,
+    "en_spect_range": [0, 3000],
+    "Queries": ["wf3_raw_pur==False"],
+    "LatestRunOnlyDatasetsLst":["background"],
+    "CalibCoeff":{
+        "0": -0.215741,
+        "1": 0.890273
+    }
+}
