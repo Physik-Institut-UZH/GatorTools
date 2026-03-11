@@ -611,7 +611,7 @@ class GatorLiveSpectrum():
         
         #Check inside the $HOME/local/etc/GatorDaqProc directory
         home_path = os.environ.get("HOME")
-        settings_dir = os.path.join(home_path, 'local', 'etc', 'GatorDaqProc')
+        settings_dir = os.path.join(home_path, 'local', 'etc', 'GatorLiveSpectra')
 
         if os.path.exists(settings_dir) and os.path.isdir(settings_dir):
             fpath = os.path.join(settings_dir, 'config.json')
