@@ -713,7 +713,7 @@ class GatorLiveSpectrum():
                 df = ret_dict['df']
                 df, ncut = self.ApplyCuts(df)
 
-                trap_en_arr = ret_dict['df']['wf1_energy_trap'].to_numpy() #HARDCODED: the name of the column. TODO: use a user setting to define the column to use
+                trap_en_arr = df['wf1_energy_trap'].to_numpy() #HARDCODED: the name of the column. TODO: use a user setting to define the column to use
                 run_dict['raw_spect'] = trap_en_arr
                 run_dict['en_spect'] = self.EnergyCalib(trap_en_arr)
 
