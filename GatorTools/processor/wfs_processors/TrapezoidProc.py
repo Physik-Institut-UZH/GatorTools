@@ -1,8 +1,8 @@
 import numpy as np
+import pandas as pd
 
-from .GatorWfsProc import register_wfs_processor
-from .GatorWfsProc import GatorWfsProc
-from ..wfs_utils import trapezoidalFilt
+from .GatorWfsProc import (GatorWfsProc, register_wfs_processor)
+from ..wfs_utils import trapezoidal_filter
 
 @register_wfs_processor('trapezoid')
 class TrapezoidProc(GatorWfsProc):
@@ -10,7 +10,7 @@ class TrapezoidProc(GatorWfsProc):
         self.trap_filters = dict()
     #
 
-    def doProc(self, wfs_bslnsubtr, df, raw_wfs=None):
+    def doProc(self, wfs_bslnsubtr:dict, df:pd.DataFrame, raw_wfs:dict|None=None) -> dict:
         self.trap_filters = dict()
         
         for wf_name in self.chs_map:
@@ -23,9 +23,8 @@ class TrapezoidProc(GatorWfsProc):
                 continue
             #
             
-            trap_filter = trapezoidalFilt(wfs, shape_time, tau, flat_top)
+            trap_filter = trapezoidal_filter(wfs, shape_time, tau, flat_top)
             
-
             #Compute the energy and put it in the dataframe
             df[wf_name+'_energy_trap'] = np.max(trap_filter, axis=1)
 
@@ -58,7 +57,7 @@ class TrapezoidProc(GatorWfsProc):
             #Do not modify the original array
             _wf = _wf.flatten()
 
-            trap_filters[wf_name] = {'trapezoid':trapezoidalFilt(_wf, shape_time, tau, flat_top)}
+            trap_filters[wf_name] = {'trapezoid':trapezoidal_filter(_wf, shape_time, tau, flat_top)}
         #
         return trap_filters
     #

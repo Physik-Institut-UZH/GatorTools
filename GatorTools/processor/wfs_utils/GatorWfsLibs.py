@@ -42,7 +42,8 @@ def BslnCorr(wfs_storage, bslns_meth, flip_wf=False):
     return wfs_proc
 #
 
-def trapezoidalFilt(arr: np.array, shape_time: int, tau: float, flat_top: int):
+def trapezoidal_filter(arr: np.array, shape_time: int, tau: float, flat_top: int):
+
     arr = np.copy(arr)
     
     is_1d = (arr.ndim == 1)
